@@ -69,7 +69,7 @@ public final class QueryBuilder<Model>
     }
 
     // MARK: Soft Delete
-
+    
     public func withDeleted() -> Self {
         self.includeDeleted = true
         return self
@@ -245,13 +245,17 @@ public final class QueryBuilder<Model>
        
         switch query.action {
             case .delete:
-                if !self.forceDelete {
+                if !self.forceDelete, let timestamp = Model().deletedTimestamp {
                     query.action = .update
-                    query.input = [.dictionary(Model.init().input.values)]
-                    Model.init().touchTimestamps(.delete, .update)
+                    let model = Model()
+                    model.touchTimestamps(.delete)
+                    query.input = [.dictionary(model.input.values)]
+//                    query.fields = [.path(timestamp.path, schema: Model.schemaOrAlias)]
+//                    query.input = [.dictionary([timestamp.path.first!: .bind(Date())])]
                 }
             case .create:
                 Model.init().touchTimestamps(.create, .update)
+                
 //                query.input = [.dictionary(Model.init().input.values)]
             default:
                 Model.init().touchTimestamps(.update)
