@@ -244,22 +244,43 @@ public final class QueryBuilder<Model>
         }
        
         switch query.action {
-            case .delete:
-                if !self.forceDelete, let timestamp = Model().deletedTimestamp {
-                    query.action = .update
-                    let model = Model()
-                    model.touchTimestamps(.delete)
-                    query.input = [.dictionary(model.input.values)]
-//                    query.fields = [.path(timestamp.path, schema: Model.schemaOrAlias)]
-//                    query.input = [.dictionary([timestamp.path.first!: .bind(Date())])]
+        case .delete:
+            if !self.forceDelete && Model().deletedTimestamp != nil {
+                query.action = .update
+                let model = Model()
+                model.touchTimestamps(.delete)
+                query.input = [.dictionary(model.input.values)]
+            }
+        case .create:
+            var data: [DatabaseQuery.Value] = []
+            
+            for case .dictionary(var nested) in query.input {
+                if let createTimestamp = Model().timestamps.filter({ $0.trigger == .create }).first {
+                    nested[createTimestamp.path.first!] = .bind(Date())
                 }
-            case .create:
-                Model.init().touchTimestamps(.create, .update)
                 
-//                query.input = [.dictionary(Model.init().input.values)]
-            default:
-                Model.init().touchTimestamps(.update)
-//                query.input = [.dictionary(Model.init().input.values)]
+                if let updateTimestamp = Model().timestamps.filter({ $0.trigger == .update }).first {
+                    nested[updateTimestamp.path.first!] = .bind(Date())
+                }
+                
+                data.append(.dictionary(nested))
+            }
+            
+            query.input = data
+        case .update:
+            var data: [DatabaseQuery.Value] = []
+            
+            for case .dictionary(var nested) in query.input {
+                if let updateTimestamp = Model().timestamps.filter({ $0.trigger == .update }).first {
+                    nested[updateTimestamp.path.first!] = .bind(Date())
+                }
+                
+                data.append(.dictionary(nested))
+            }
+            
+            query.input = data
+        default:
+            break 
         }
         
         self.database.logger.info("\(self.query)")
